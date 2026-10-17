@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>打地鼠 Whack-a-Mole</title>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --grass:#8fe07a; --grass-d:#5cc24f; --dirt:#7b4a2b; --hole:#2b1a10;
+  --fur:#b9783f; --fur-d:#8d5629; --belly:#f3d3a4; --helmet:#8f9bab;
+  --ink:#3a2314; --card:#fff8e1; --accent:#ff7a59;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;min-height:100%}
+body{
+  font-family:'Fredoka','Segoe UI','PingFang TC','Microsoft JhengHei',sans-serif;
+  color:var(--ink); display:flex; justify-content:center; padding:16px;
+  background:radial-gradient(circle at 20% 10%,#c9f5a8 0,transparent 40%),
+             linear-gradient(180deg,#9be7ff 0,#bff3d0 28%,var(--grass) 28%,var(--grass-d) 100%);
+  background-attachment:fixed; user-select:none; -webkit-user-select:none; touch-action:manipulation;
+}
+#game{width:100%;max-width:560px;margin:0 auto;text-align:center}
+#game.shake{animation:shake .18s}
+@keyframes shake{
+  0%,100%{transform:translate(0,0)} 25%{transform:translate(-4px,2px)}
+  50%{transform:translate(4px,-2px)} 75%{transform:translate(-3px,-1px)}
+}
+h1{margin:4px 0 12px;font-size:clamp(1.6rem,6vw,2.4rem);text-shadow:0 3px 0 #fff8}
+.info{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.info div{background:var(--card);border:3px solid var(--ink);border-radius:16px;padding:6px 4px;
+  box-shadow:0 4px 0 var(--ink);font-size:clamp(.75rem,3vw,.95rem)}
+.info b{display:block;font-size:clamp(1.2rem,5.5vw,1.8rem);line-height:1.1}
+.controls{display:flex;gap:10px;justify-content:center;margin-bottom:14px}
+button{font:inherit;font-weight:700;font-size:clamp(.95rem,4vw,1.1rem);padding:10px 20px;cursor:pointer;
+  color:var(--ink);background:var(--accent);border:3px solid var(--ink);border-radius:999px;box-shadow:0 4px 0 var(--ink)}
+button:active{transform:translateY(3px);box-shadow:0 1px 0 var(--ink)}
+button.alt{background:#ffd54a}
+button:disabled{opacity:.5;cursor:not-allowed}
+
+/* 4x4 網格：寬度自動適應螢幕 */
+.board{display:grid;grid-template-columns:repeat(4,1fr);gap:clamp(6px,2.5vw,16px);position:relative;
+  padding:clamp(8px,3vw,16px);background:#6fd35f;border:4px solid var(--ink);border-radius:24px;box-shadow:0 6px 0 var(--ink)}
+.hole{position:relative;aspect-ratio:1/1;overflow:hidden;cursor:pointer;border-radius:0 0 40% 40%/0 0 30% 30%}
+.hole::before{ /* 洞口陰影 */
+  content:"";position:absolute;left:5%;right:5%;bottom:4%;height:34%;border-radius:50%;
+  background:radial-gradient(ellipse at 50% 30%,#000 0,var(--hole) 70%);box-shadow:inset 0 6px 8px #000a}
+.hole::after{ /* 前方土堆，遮住縮回的地鼠 */
+  content:"";position:absolute;left:0;right:0;bottom:0;height:22%;z-index:3;border-radius:50% 50% 40% 40%;
+  background:linear-gradient(var(--dirt),#5a3319);box-shadow:0 -3px 0 #9b6238 inset}
+.hole.off{pointer-events:none}
+
+.mole{position:absolute;left:14%;width:72%;height:62%;bottom:14%;z-index:2;
+  transform:translateY(120%);transition:transform .18s ease-out}
+.hole.up .mole{transform:translateY(0)}
+.body{position:absolute;inset:0;background:var(--fur);border:3px solid var(--ink);border-radius:50% 50% 38% 38%;
+  box-shadow:inset -6px -6px 0 var(--fur-d)}
+.eye{position:absolute;top:36%;width:14%;height:17%;background:var(--ink);border-radius:50%}
+.eye::after{content:"";position:absolute;top:18%;left:22%;width:30%;height:30%;background:#fff;border-radius:50%}
+.eye.l{left:24%} .eye.r{right:24%}
+.nose{position:absolute;left:41%;top:54%;width:18%;height:12%;background:#ff8fa3;border:2px solid var(--ink);border-radius:50%}
+.mouth{position:absolute;left:38%;top:68%;width:24%;height:14%;border-bottom:3px solid var(--ink);border-radius:0 0 50% 50%}
+.cheek{position:absolute;top:58%;width:12%;height:8%;background:#ff9a9a99;border-radius:50%}
+.cheek.l{left:12%} .cheek.r{right:12%}
+.helmet{position:absolute;left:-4%;right:-4%;top:-8%;height:40%;background:var(--helmet);
+  border:3px solid var(--ink);border-radius:60% 60% 14% 14%;box-shadow:inset -6px -4px 0 #6b7686;
+  transition:transform .35s ease-in,opacity .35s}
+.helmet::after{content:"";position:absolute;left:44%;top:8%;width:12%;height:30%;background:#ffd54a;border:2px solid var(--ink);border-radius:30%}
+.mole.nohelmet .helmet,.mole:not(.armored) .helmet{display:none}
+.mole.armored.nohelmet .helmet{display:block;transform:translate(60%,160%) rotate(50deg);opacity:0}
+/* 暈眩：眼睛變成 X，頭上出現星星 */
+.mole.dizzy .eye{background:none;width:16%;height:16%}
+.mole.dizzy .eye::before,.mole.dizzy .eye::after{content:"";position:absolute;left:0;top:45%;width:100%;height:4px;
+  background:var(--ink);border-radius:2px;transform:rotate(45deg)}
+.mole.dizzy .eye::after{inset:auto;left:0;top:45%;transform:rotate(-45deg)}
+.mole.dizzy .mouth{border:3px solid var(--ink);border-radius:50%;height:12%;width:14%;left:43%}
+.mole.dizzy::after{content:"★ ★";position:absolute;top:-16%;left:0;right:0;font-size:clamp(.8rem,4vw,1.4rem);color:#ffd54a;
+  text-shadow:0 0 0 var(--ink),1px 1px 0 var(--ink);animation:spin .4s linear infinite alternate}
+@keyframes spin{from{transform:translateX(-6px)}to{transform:translateX(6px)}}
+
+.float{position:fixed;z-index:50;pointer-events:none;font-weight:700;font-size:clamp(1.4rem,6vw,2rem);
+  color:#fff;-webkit-text-stroke:2px var(--ink);paint-order:stroke fill;animation:floatUp .8s ease-out forwards}
+.float.big{color:#ffd54a;font-size:clamp(1.8rem,7vw,2.6rem)}
+@keyframes floatUp{from{opacity:1;transform:translate(-50%,0) scale(.8)}to{opacity:0;transform:translate(-50%,-70px) scale(1.2)}}
+
+#overlay{position:absolute;inset:0;z-index:10;display:none;align-items:center;justify-content:center;
+  background:#0006;border-radius:20px}
+#overlay.show{display:flex}
+#overlay .box{background:var(--card);border:4px solid var(--ink);border-radius:20px;padding:18px 26px;box-shadow:0 6px 0 var(--ink)}
+#overlay h2{margin:0 0 6px} #overlay p{margin:4px 0}
+.rules{margin-top:16px;text-align:left;background:var(--card);border:4px solid var(--ink);border-radius:20px;
+  box-shadow:0 6px 0 var(--ink);padding:12px 16px}
+.rules h3{margin:0 0 8px;font-size:clamp(1.2rem,5vw,1.6rem);text-align:center}
+.rules p{margin:6px 0;font-size:clamp(1.05rem,4.5vw,1.4rem);font-weight:700;line-height:1.4}
+.rules .pts{display:inline-block;background:#ffd54a;border:3px solid var(--ink);border-radius:999px;
+  padding:0 10px;margin-left:4px;color:var(--ink)}
+.rules .pts.hot{background:var(--accent);color:#fff}
+@media (prefers-reduced-motion:reduce){#game.shake{animation:none}.mole{transition:none}}
+</style>
+</head>
+<body>
+<div id="game">
+  <h1>🔨 打地鼠大作戰</h1>
+
+  <div class="info">
+    <div>剩餘時間<b>Time: <span id="time">40</span>s</b></div>
+    <div>目前分數<b>Score: <span id="score">0</span></b></div>
+    <div>最高分數<b>High: <span id="high">0</span></b></div>
+  </div>
+
+  <div class="controls">
+    <button id="startBtn">開始遊戲 Start</button>
+    <button id="restartBtn" class="alt">重新開始 Restart</button>
+  </div>
+
+  <div class="board" id="board">
+    <div id="overlay"><div class="box">
+      <h2 id="ovTitle">準備好了嗎？</h2>
+      <p id="ovText">按下「開始遊戲」開打！</p>
+    </div></div>
+  </div>
+
+  <div class="rules">
+    <h3>📜 遊戲規則</h3>
+    <p>1. 普通地鼠：打中 1 次即得分<span class="pts">+10 分</span></p>
+    <p>2. 鋼盔地鼠：需打中 2 次<span class="pts hot">第 2 次 +20 分</span></p>
+  </div>
+</div>
+
+<!-- 音效：以下為公開音效 placeholder；若連結載入失敗，程式會自動改用內建合成音效 -->
+<audio id="bgm"   src="https://actions.google.com/sounds/v1/ambiences/arcade_room.ogg" loop preload="auto"></audio>
+<audio id="sHit"  src="https://actions.google.com/sounds/v1/cartoon/pop.ogg" preload="auto"></audio>
+<audio id="sMetal" src="https://actions.google.com/sounds/v1/impacts/metal_hit_wall.ogg" preload="auto"></audio>
+<audio id="sOver" src="https://actions.google.com/sounds/v1/cartoon/slide_whistle_to_drum.ogg" preload="auto"></audio>
+
+<script>
+/* ===== 設定 ===== */
+const GAME_SECONDS = 40;
+const HELMET_CHANCE = 0.3;           // 鋼盔地鼠出現機率
+const DIZZY_MS = 200;                // 暈眩停留時間
+const STAY_START = 1200, STAY_END = 700;   // 探頭停留 (ms)：開局 → 結尾
+const GAP_START  = 900,  GAP_END  = 350;   // 下次出現間隔 (ms)
+
+/* ===== DOM ===== */
+const $ = id => document.getElementById(id);
+const gameEl = $('game'), board = $('board'), overlay = $('overlay');
+const timeEl = $('time'), scoreEl = $('score'), highEl = $('high');
+
+/* ===== 狀態 ===== */
+let timeUp = true;
+let score = 0, timeLeft = GAME_SECONDS;
+let highScore = Number(localStorage.getItem('moleHighScore')) || 0;
+let countdownTimer = null, spawnTimer = null;
+const holes = [];                    // 每個洞的資料
+highEl.textContent = highScore;
+
+/* ===== 建立 16 個地洞 ===== */
+for (let i = 0; i < 16; i++) {
+  const el = document.createElement('div');
+  el.className = 'hole off';
+  el.innerHTML = `<div class="mole"><div class="body">
+    <div class="eye l"></div><div class="eye r"></div>
+    <div class="cheek l"></div><div class="cheek r"></div>
+    <div class="nose"></div><div class="mouth"></div>
+    <div class="helmet"></div></div></div>`;
+  board.appendChild(el);
+  const h = { el, mole: el.querySelector('.mole'), active: false, hp: 0, helmet: false, hideTimer: null };
+  // pointerdown 同時涵蓋滑鼠與觸控，且比 click 少約 300ms 延遲
+  el.addEventListener('pointerdown', e => { e.preventDefault(); whack(h, e.clientX, e.clientY); });
+  holes.push(h);
+}
+
+/* ===== 音效 ===== */
+const audio = { bgm: $('bgm'), hit: $('sHit'), metal: $('sMetal'), over: $('sOver') };
+audio.bgm.volume = 0.3;
+let actx = null, bgmSynth = null;
+const ctx = () => actx || (actx = new (window.AudioContext || window.webkitAudioContext)());
+function beep(freq, dur, type = 'square', vol = 0.15) {   // 備用合成音
+  try {
+    const c = ctx(), o = c.createOscillator(), g = c.createGain();
+    o.type = type; o.frequency.value = freq; g.gain.value = vol;
+    g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + dur);
+    o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime + dur);
+  } catch (e) {}
+}
+const fallback = {
+  hit:   () => { beep(520, .1, 'triangle'); setTimeout(() => beep(780, .1, 'triangle'), 70); },
+  metal: () => { beep(1500, .15, 'square', .2); beep(2300, .1, 'square', .1); },
+  over:  () => [523, 392, 330, 262].forEach((f, i) => setTimeout(() => beep(f, .25, 'sawtooth'), i * 220)),
+  bgm:   () => { const n = [262, 330, 392, 330]; let i = 0;
+                 bgmSynth = setInterval(() => beep(n[i++ % 4], .2, 'sine', .06), 300); }
+};
+function play(name) {
+  const a = audio[name];
+  a.currentTime = 0;
+  const p = a.play();
+  if (p) p.catch(() => { if (name !== 'bgm' || !bgmSynth) fallback[name](); });  // 載入失敗或被瀏覽器擋下
+  a.onerror = () => fallback[name]();
+}
+function stopBgm() { audio.bgm.pause(); audio.bgm.currentTime = 0; clearInterval(bgmSynth); bgmSynth = null; }
+
+/* ===== 難度曲線：依經過時間線性插值 ===== */
+function lerp(a, b) {
+  const progress = 1 - timeLeft / GAME_SECONDS;      // 0 → 1
+  return a + (b - a) * progress;
+}
+const stayTime = () => lerp(STAY_START, STAY_END);
+const gapTime  = () => lerp(GAP_START, GAP_END);
+
+/* ===== 地鼠出現 / 消失 ===== */
+function popUp() {
+  if (timeUp) return;
+  const free = holes.filter(h => !h.active);
+  if (free.length) {
+    const h = free[Math.floor(Math.random() * free.length)];
+    h.active = true;
+    h.helmet = Math.random() < HELMET_CHANCE;
+    h.hp = h.helmet ? 2 : 1;
+    h.mole.className = 'mole' + (h.helmet ? ' armored' : '');
+    h.el.classList.remove('off');
+    h.el.classList.add('up');
+    h.hideTimer = setTimeout(() => hide(h), stayTime());
+  }
+  spawnTimer = setTimeout(popUp, gapTime());          // 排下一隻
+}
+function hide(h) {
+  clearTimeout(h.hideTimer);
+  h.active = false;
+  h.el.classList.remove('up');
+  h.el.classList.add('off');                           // 縮回後不可點擊
+}
+
+/* ===== 打擊 ===== */
+function whack(h, x, y) {
+  if (timeUp || !h.active || h.hp <= 0) return;
+  h.hp--;
+  if (h.helmet && h.hp === 1) {                        // 第 1 下：鋼盔掉落，不計分
+    h.mole.classList.add('nohelmet');
+    play('metal'); shake();
+    return;
+  }
+  const pts = h.helmet ? 20 : 10;                      // 擊暈
+  addScore(pts); popText(`+${pts}`, x, y, h.helmet);
+  play('hit'); shake();
+  h.el.classList.add('off');                           // 防連點：立刻停用點擊
+  h.mole.classList.add('dizzy');
+  clearTimeout(h.hideTimer);
+  h.hideTimer = setTimeout(() => hide(h), DIZZY_MS);   // 暈眩 0.2 秒後縮回
+}
+function addScore(n) { score += n; scoreEl.textContent = score; }
+function shake() {
+  gameEl.classList.remove('shake'); void gameEl.offsetWidth; gameEl.classList.add('shake');
+}
+function popText(text, x, y, big) {
+  const t = document.createElement('div');
+  t.className = 'float' + (big ? ' big' : '');
+  t.textContent = text; t.style.left = x + 'px'; t.style.top = y + 'px';
+  document.body.appendChild(t);
+  t.addEventListener('animationend', () => t.remove());
+}
+
+/* ===== 遊戲流程 ===== */
+function clearAll() {                                  // 清除所有計時器與地鼠
+  clearInterval(countdownTimer); clearTimeout(spawnTimer);
+  holes.forEach(h => { hide(h); h.mole.className = 'mole'; });
+}
+function startGame() {
+  clearAll(); stopBgm();
+  score = 0; timeLeft = GAME_SECONDS; timeUp = false;
+  scoreEl.textContent = 0; timeEl.textContent = timeLeft;
+  overlay.classList.remove('show');
+  $('startBtn').disabled = true;
+  play('bgm');
+  countdownTimer = setInterval(() => {
+    timeLeft--; timeEl.textContent = timeLeft;
+    if (timeLeft <= 0) endGame();
+  }, 1000);
+  spawnTimer = setTimeout(popUp, 500);
+}
+function endGame() {
+  timeUp = true;
+  clearAll(); stopBgm(); play('over');
+  let msg = `本局得分：${score} 分`;
+  if (score > highScore) {
+    highScore = score; localStorage.setItem('moleHighScore', highScore);
+    highEl.textContent = highScore; msg += '　🎉 新紀錄！';
+  }
+  $('ovTitle').textContent = '時間到！'; $('ovText').textContent = msg;
+  overlay.classList.add('show');
+  $('startBtn').disabled = false;
+}
+$('startBtn').addEventListener('click', startGame);
+$('restartBtn').addEventListener('click', startGame);   // 進行中或結束後皆可重置
+overlay.classList.add('show');
+</script>
+</body>
+</html>
